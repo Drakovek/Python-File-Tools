@@ -9,7 +9,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Python-File-Tools",
-    version="0.1.0",
+    version="0.2.0",
     author="Drakovek",
     author_email="DrakovekMail@gmail.com",
     description="Some basic tools that makes some basic file operations easier in Python. ",

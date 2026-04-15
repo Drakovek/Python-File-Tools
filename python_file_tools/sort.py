@@ -14,16 +14,10 @@ def get_first_section(string:str) -> str:
     :return: The first "section" of the given string
     :rtype: str
     """
-    # Check if string starts with a number
-    if len(re.findall("^[0-9]", string)) > 0:
-        # Return number section if string starts with a number
-        return re.findall(r"[0-9]+[0-9,\.]*", string)[0]
-    # Return non-number section if string doesn't start with number
-    sections = re.findall("[^0-9]+", string)
-    if len(sections) > 0:
-        return sections[0]
-    # Return empty string if no sections could be found
-    return ""
+    try:
+        return re.findall(r"^[0-9]+[0-9,\.]*|^[^0-9]+", string)[0]
+    except:
+        return ""
 
 def compare_sections(section1:str, section2:str) -> int:
     """
@@ -42,18 +36,16 @@ def compare_sections(section1:str, section2:str) -> int:
         # Compare numbers, if applicable.
         float1 = float(section1.replace(",", ""))
         float2 = float(section2.replace(",", ""))
-        if float1 > float2:
-            return 1
+        if float1 == float2:
+            return 0
         elif float1 < float2:
             return -1
-        return 0
+        return 1
     except ValueError:
-        # Return 0 if sections are identical
+        # Compare text values
         if section1 == section2:
             return 0
-        # Compare text values
-        sort = sorted([section1, section2])
-        if sort[0] == section1:
+        elif section1 < section2:
             return -1
         return 1
 

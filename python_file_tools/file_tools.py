@@ -6,7 +6,6 @@ import re
 import shutil
 import tempfile
 import zipfile
-import html_string_tools
 import python_file_tools.sort as pft_sort
 from os.path import abspath, basename, exists, isdir, join, relpath
 from typing import List
@@ -73,6 +72,24 @@ def read_json_file(file:str) -> dict:
         return json_dict
     except(TypeError, json.JSONDecodeError): return {}
 
+def get_extension(path:str) -> str:
+    """
+    Returns the extension for a given filename or direct file URL.
+    If extension does not exist, returns empty.
+
+    :param path: Given path with extension
+    :type path: str, required
+    :return: Extension for the path
+    :rtype: str
+    """
+    try:
+        # Find potential extensions
+        regex = "\\.[a-zA-Z0-9]{1,5}(?=\\?[^\\?]*$)|\\.[a-zA-Z0-9]{1,5}$"
+        extension = re.findall(regex, path)[0]
+        # Return the extension
+        return extension
+    except (IndexError, TypeError): return ""
+
 def find_all_files(directory:str, include_subdirectories:bool=True) -> List[str]:
     """
     Returns a list of all files within a given directory
@@ -84,21 +101,19 @@ def find_all_files(directory:str, include_subdirectories:bool=True) -> List[str]
     :return: List of all files, giving the full file path
     :rtype: list[str]
     """
-    # Run through all directories
     files = []
-    directories = [abspath(directory)]
-    while len(directories) > 0:
-        # Get list of all files in the current directory
-        current_files = os.listdir(directories[0])
-        for filename in current_files:
-            # Check if file is a directory
-            full_file = abspath(join(directories[0], filename))
+    base_dir = abspath(directory)
+    # Walk through if including subdirectories
+    if include_subdirectories:
+        for root, dirs, filenames in os.walk(base_dir):
+            for filename in filenames:
+                files.append(abspath(join(root, filename)))
+    # Only list top level if not including subdirectories
+    else:
+        for filename in os.listdir(base_dir):
+            full_file = abspath(join(base_dir, filename))
             if not isdir(full_file):
                 files.append(full_file)
-            elif include_subdirectories:
-                directories.append(full_file)
-        # Delete the current directory from the list
-        del directories[0]
     # Return list of files
     return pft_sort.sort_alphanum(files)
 
@@ -118,19 +133,19 @@ def find_files_of_type(directory:str, extension:str,
     :return: List of files that match the extension, giving the full file path
     :rtype: list[str]
     """
-    # Get the list of extensions
-    extensions = extension
-    if isinstance(extensions, str):
-        extensions = [extensions.lower()]
+    # Get the set of extensions
+    extensions = set()
+    if isinstance(extension, str):
+        extensions.add(extension.lower())
     else:
-        for i in range(0, len(extensions)):
-            extensions[i] = extensions[i].lower()
+        for i in range(0, len(extension)):
+            extensions.add(extension[i].lower())
     # Get list of all files in the given directory
     all_files = find_all_files(directory, include_subdirectories)
     # Find files that match the given extensions
     files = []
     for current_file in all_files:
-        current_extension = html_string_tools.get_extension(current_file).lower()
+        current_extension = get_extension(current_file).lower()
         if not (current_extension in extensions) == inverted:
             files.append(current_file)
     # Return files
@@ -149,31 +164,25 @@ def directory_contains(directory:str, extension:List[str], include_subdirectorie
     :return: Whether any files of the given extensions exist in the given directory
     :rtype: bool
     """
-    directories = [abspath(directory)]
-    # Get the list of extensions
-    extensions = extension
-    if isinstance(extensions, str):
-        extensions = [extensions]
-    # Run through all directories
-    while len(directories) > 0:
-        # Get list of all files in the current directory
-        current_files = os.listdir(directories[0])
-        for filename in current_files:
-            # Get the full file
-            full_file = abspath(join(directories[0], filename))
-            # Check if the file is a directory
-            if isdir(full_file):
-                if include_subdirectories:
-                    directories.append(full_file)
-                continue
-            # Check if the extension matches
-            cur_extension = html_string_tools.get_extension(full_file).lower()
-            if cur_extension in extensions:
-                return True
-        # Delete the current directory from the list
-        del directories[0]
-    # Return false if no files of the type specified were found
-    return False
+    # Walk through if including subdirectories
+    if include_subdirectories:
+        # Get the set of extensions
+        extensions = set()
+        if isinstance(extension, str):
+            extensions.add(extension.lower())
+        else:
+            for i in range(0, len(extension)):
+                extensions.add(extension[i].lower())
+        # Find if any of the files contain this extension
+        for root, dirs, filenames in os.walk(abspath(directory)):
+            for filename in filenames:
+                current_extension = get_extension(filename)
+                if current_extension in extension:
+                    return True
+        return False
+    # Check if contains extension when not including subdirectories
+    files = find_files_of_type(directory, extension, include_subdirectories=False, inverted=False)
+    return len(files) > 0
 
 def create_zip(directory:str, zip_path:str, compress_level:int=9, mimetype:str=None) -> bool:
     """
@@ -192,15 +201,7 @@ def create_zip(directory:str, zip_path:str, compress_level:int=9, mimetype:str=N
     """
     # Get list of files in the directory
     full_directory = abspath(directory)
-    files = os.listdir(full_directory)
-    for i in range(0, len(files)):
-        files[i] = abspath(join(full_directory, files[i]))
-    # Expand list of files to include subdirectories
-    for file in files:
-        if isdir(file):
-            sub_files = os.listdir(file)
-            for i in range(0, len(sub_files)):
-                files.append(abspath(join(file, sub_files[i])))
+    files = find_all_files(full_directory, include_subdirectories=True)
     # Create empty zip file
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=compress_level) as out_file:
         if mimetype is not None:
@@ -263,7 +264,7 @@ def extract_zip(zip_path:str, extract_directory:str, create_folder:bool=False,
         new_dir = abspath(extract_directory)
         if create_folder or contains_existing:
             filename = basename(zip_path)
-            extension = html_string_tools.get_extension(filename)
+            extension = get_extension(filename)
             filename = filename[:len(filename) - len(extension)]
             filename = get_available_filename(["AAAAAAAAAA"], filename, main_dir)
             new_dir = abspath(join(main_dir, filename))
@@ -271,7 +272,7 @@ def extract_zip(zip_path:str, extract_directory:str, create_folder:bool=False,
         # Copy files to new directory
         files = os.listdir(unzip_dir)
         for current_file in files:
-            extension = html_string_tools.get_extension(current_file)
+            extension = get_extension(current_file)
             filename = current_file[:len(current_file) - len(extension)]
             filename = get_available_filename([current_file], filename, new_dir)
             old_file = abspath(join(unzip_dir, current_file))
@@ -313,7 +314,7 @@ def extract_file_from_zip(zip_path:str, extract_directory:str, extract_file:str,
                 new_file = abspath(join(extract_directory, extract_file))
                 # Update file if it already exists
                 if exists(new_file):
-                    extension = html_string_tools.get_extension(extract_file)
+                    extension = get_extension(extract_file)
                     filename = extract_file[:len(extract_file) - len(extension)]
                     filename = get_available_filename([extracted], filename, extract_directory)
                     new_file = abspath(join(extract_directory, f"{filename}{extension}"))
@@ -401,14 +402,14 @@ def get_available_filename(source_files:List[str], filename:str, end_path:str, a
     extensions = []
     if isinstance(source_files, list):
         for source_file in source_files:
-            extensions.append(html_string_tools.get_extension(source_file))
+            extensions.append(get_extension(source_file))
     else:
-        extensions = [html_string_tools.get_extension(source_files)]
+        extensions = [get_extension(source_files)]
     # Get a list of all the files in the end path
+    files = set()
     try:
-        files = []
-        for file in os.listdir(abspath(end_path)):
-            files.append(file.lower())
+        for filename in os.listdir(abspath(end_path)):
+            files.add(filename.lower())
     except FileNotFoundError:
         return None
     # Get the new filename that is available
@@ -439,7 +440,7 @@ def rename_file(file:str, new_filename:str, ascii_only:bool=False) -> str:
     """
     # Get the prefered new filename
     path = abspath(file)
-    extension = html_string_tools.get_extension(file)
+    extension = get_extension(file)
     filename = get_file_friendly_text(new_filename, ascii_only)
     # Do nothing if the filename is already accurate
     if basename(path) == f"{filename}{extension}":

@@ -79,6 +79,28 @@ def test_write_json_file():
         python_file_tools.write_json_file(fake_json_file, "Thing")
         assert os.listdir(abspath(temp_dir)) == ["test.json"]
 
+def test_get_extension():
+    """
+    Tests the get_extension function.
+    """
+    # Test getting extensions from filenames
+    assert python_file_tools.get_extension("test.png") == ".png"
+    assert python_file_tools.get_extension(".long") == ".long"
+    assert python_file_tools.get_extension("test2.thing") == ".thing"
+    assert python_file_tools.get_extension("blah.test.png") == ".png"
+    # Test getting extensions from URLs with tokens
+    assert python_file_tools.get_extension("test.mp4?extra_.thing") == ".mp4"
+    assert python_file_tools.get_extension("thing.test.thing?") == ".thing"
+    assert python_file_tools.get_extension("another.txt? test.png?extra.thing") == ".png"
+    # Test getting invalid extensions
+    assert python_file_tools.get_extension("test.tolong") == ""
+    assert python_file_tools.get_extension("test.notextension") == ""
+    assert python_file_tools.get_extension("asdfasdfasdfasdf") == ""
+    assert python_file_tools.get_extension("test.tolong?extra") == ""
+    assert python_file_tools.get_extension("none?") == ""
+    # Test getting extension if given string is None
+    assert python_file_tools.get_extension(None) == ""
+
 def test_extract_zip():
     """
     Tests the extract_zip function.

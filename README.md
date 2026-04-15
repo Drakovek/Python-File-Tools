@@ -24,6 +24,10 @@ Writes a given dictionary as a .json file using UTF-8 encoding.
 
 Returns the contents of a given .json file as a python dictionary, with support for different text encoding schemes.
 
+## get_extension
+
+Returns the file extension for any given filename, file path, or URL
+
 ## find_all_files
 
 Returns a list of absolute file paths for all the files in a directory, with or without subdirectories
